@@ -17,6 +17,17 @@ const IS_KEYLESS = !API_KEY;
 const HUMAN_ID = process.env.TAVILY_HUMAN_ID;
 const SESSION_ID = randomUUID();
 
+/**
+ * When running without a TAVILY_API_KEY (keyless mode), append a note to the
+ * descriptions of tools that require a key, so agents don't attempt tools that
+ * can't run. tavily_search and tavily_extract work without a key; tavily_crawl,
+ * tavily_map, and tavily_research require the TAVILY_API_KEY environment variable.
+ */
+const KEYLESS_TOOL_NOTE =
+  " Requires the TAVILY_API_KEY environment variable, which is not set (keyless mode); calling this tool returns an 'API key required' message.";
+const describeTool = (description: string, requiresKey: boolean): string =>
+  requiresKey && IS_KEYLESS ? description + KEYLESS_TOOL_NOTE : description;
+
 
 interface TavilyResponse {
   // Response structure from Tavily API
@@ -107,7 +118,9 @@ HOW TOOLS COMBINE
 RETURN FORMAT (important)
 Every Tavily tool returns ONE markdown TEXT STRING. The whole result is plain text (titles, URLs, content). It is NOT a JSON object: there is no .results array, no .answer, and no .data property. Treat the return value itself as the text; do not index properties on it.
 
-All tools require the TAVILY_API_KEY environment variable. If a result says 'API key required', the key env var is missing.`,
+${IS_KEYLESS
+  ? `Running in KEYLESS mode (no TAVILY_API_KEY set): tavily_search and tavily_extract are available now. tavily_crawl, tavily_map, and tavily_research require the TAVILY_API_KEY environment variable and will return an 'API key required' message if called.`
+  : `tavily_search and tavily_extract also work in keyless mode; tavily_crawl, tavily_map, and tavily_research require the TAVILY_API_KEY environment variable (currently set). If a result says 'API key required', the key env var is missing.`}`,
       }
     );
 
@@ -314,7 +327,7 @@ All tools require the TAVILY_API_KEY environment variable. If a result says 'API
         },
         {
           name: "tavily_crawl",
-          description: "Crawl a website from a base URL, bulk-extracting content from many pages with configurable depth and breadth. Heavier than tavily_extract. Returns markdown text.",
+          description: describeTool("Crawl a website from a base URL, bulk-extracting content from many pages with configurable depth and breadth. Heavier than tavily_extract. Returns markdown text.", true),
           inputSchema: {
             type: "object",
             properties: {
@@ -384,7 +397,7 @@ All tools require the TAVILY_API_KEY environment variable. If a result says 'API
         },
         {
           name: "tavily_map",
-          description: "Map a website's structure: returns the URLs found starting from a base URL. Use to discover targets for tavily_crawl or tavily_extract. Returns markdown text.",
+          description: describeTool("Map a website's structure: returns the URLs found starting from a base URL. Use to discover targets for tavily_crawl or tavily_extract. Returns markdown text.", true),
           inputSchema: {
             type: "object",
             properties: {
@@ -437,7 +450,7 @@ All tools require the TAVILY_API_KEY environment variable. If a result says 'API
         },
         {
           name: "tavily_research",
-          description: "Perform deep multi-source research on a topic, synthesizing across many sources. Escalate here from tavily_search only for broad or complex questions one search cannot answer. Rate-limited (20 requests/min). Returns a markdown text string.",
+          description: describeTool("Perform deep multi-source research on a topic, synthesizing across many sources. Escalate here from tavily_search only for broad or complex questions one search cannot answer. Rate-limited (20 requests/min). Returns a markdown text string.", true),
           inputSchema: {
             type: "object",
             properties: {
@@ -1041,15 +1054,15 @@ function listTools(): void {
     },
     {
       name: "tavily_crawl",
-      description: "Crawl a website from a base URL, bulk-extracting content from many pages with configurable depth and breadth. Heavier than tavily_extract. Returns markdown text."
+      description: describeTool("Crawl a website from a base URL, bulk-extracting content from many pages with configurable depth and breadth. Heavier than tavily_extract. Returns markdown text.", true)
     },
     {
       name: "tavily_map",
-      description: "Map a website's structure: returns the URLs found starting from a base URL. Use to discover targets for tavily_crawl or tavily_extract. Returns markdown text."
+      description: describeTool("Map a website's structure: returns the URLs found starting from a base URL. Use to discover targets for tavily_crawl or tavily_extract. Returns markdown text.", true)
     },
     {
       name: "tavily_research",
-      description: "Perform deep multi-source research on a topic, synthesizing across many sources. Escalate here from tavily_search only for broad or complex questions one search cannot answer. Rate-limited (20 requests/min). Returns a markdown text string."
+      description: describeTool("Perform deep multi-source research on a topic, synthesizing across many sources. Escalate here from tavily_search only for broad or complex questions one search cannot answer. Rate-limited (20 requests/min). Returns a markdown text string.", true)
     }
   ];
 
