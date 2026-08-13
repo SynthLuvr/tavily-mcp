@@ -3,12 +3,17 @@
 ![npm](https://img.shields.io/npm/dt/tavily-mcp)
 ![smithery badge](https://smithery.ai/badge/@tavily-ai/tavily-mcp)
 
-The Tavily MCP server provides:
-- search, extract, map, crawl tools
-- Real-time web search capabilities through the tavily-search tool
-- Intelligent data extraction from web pages via the tavily-extract tool
-- Powerful web mapping tool that creates a structured map of website 
-- Web crawler that systematically explores websites 
+The Tavily MCP server provides five tools for web search and research:
+
+| Tool | Description |
+|------|-------------|
+| `tavily_search` | Fast web search — returns ranked snippets and URLs for a query |
+| `tavily_research` | Deep multi-source research — synthesizes findings from many sources into a comprehensive answer |
+| `tavily_extract` | Extract full content from specific URLs |
+| `tavily_map` | Map a website's URL structure |
+| `tavily_crawl` | Bulk-crawl many pages from a site |
+
+**When to use `tavily_search` vs `tavily_research`:** Use `tavily_search` for quick lookups where a snippet-level answer is enough. Use `tavily_research` when you need a thorough, synthesized answer drawn from multiple sources — it is slower and costs more credits (up to 250 per call), but returns a detailed report rather than a list of results.
 
 
 ### 📚 Helpful Resources
@@ -69,7 +74,7 @@ After adding, you'll need to complete the authentication flow:
 claude mcp add --transport http --scope user tavily https://mcp.tavily.com/mcp/?tavilyApiKey=<your-api-key>
 ```
 
-Once configured, you'll have access to the Tavily search, extract, map, and crawl tools.
+Once configured, you'll have access to all five Tavily tools: search, research, extract, map, and crawl.
 
 ## Connect to Cursor
 [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=tavily-remote-mcp&config=eyJjb21tYW5kIjoibnB4IC15IG1jcC1yZW1vdGUgaHR0cHM6Ly9tY3AudGF2aWx5LmNvbS9tY3AvP3RhdmlseUFwaUtleT08eW91ci1hcGkta2V5PiIsImVudiI6e319)
@@ -179,6 +184,33 @@ Before you begin, ensure you have:
 ```bash
 npx -y tavily-mcp@latest 
 ```
+
+## tavily_research — Deep Research Tool 🔬
+
+The `tavily_research` tool performs comprehensive, multi-source research and returns a synthesized answer rather than a list of search results. Use it when a question requires gathering and reconciling information from many sources.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `input` | `string` | ✅ | A comprehensive description of the research task |
+| `model` | `string` | ❌ | Research depth — `"mini"` for narrow tasks with few subtopics, `"pro"` for broad tasks with many subtopics, `"auto"` (default) to let Tavily pick |
+
+### Example
+
+```json
+{
+  "input": "What are the key differences between transformer and state space model architectures for long-context tasks?",
+  "model": "pro"
+}
+```
+
+### Notes
+
+- **Rate limit:** 20 requests per minute
+- **Credit cost:** Up to 250 credits per call (vs. 1–5 for `tavily_search`)
+- **Response format:** A detailed synthesized report with citations, not a list of snippets
+- **Streaming/async:** The remote MCP endpoint handles polling internally — the tool call blocks until the report is ready
 
 ## Default Parameters Configuration ⚙️
 
