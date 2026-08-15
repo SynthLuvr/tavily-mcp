@@ -46,6 +46,7 @@ interface TavilyResponse {
     published_date?: string;
     raw_content?: string;
     favicon?: string;
+    id: string;
   }>;
 }
 
@@ -96,7 +97,7 @@ class TavilyClient {
     this.server = new Server(
       {
         name: "tavily-mcp",
-        version: "0.2.21",
+        version: "0.2.22",
       },
       {
         capabilities: {
@@ -968,6 +969,9 @@ function formatResults(response: TavilyResponse): string {
   output.push('Detailed Results:');
   response.results.forEach(result => {
     output.push(`\nTitle: ${result.title}`);
+    if (result.id) {
+      output.push(`ID: ${result.id}`);
+    }
     output.push(`URL: ${result.url}`);
     output.push(`Content: ${result.content}`);
     if (result.raw_content) {
