@@ -2,6 +2,8 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { ServerResponse } from "node:http";
 import {CallToolRequestSchema, ListToolsRequestSchema, Tool} from "@modelcontextprotocol/sdk/types.js";
 import axios from "axios";
 import { randomUUID } from "crypto";
@@ -703,9 +705,85 @@ class TavilyClient {
 
 
   async run(): Promise<void> {
+    if (argv.http) {
+      await this.runHttpServer(Number(argv.http), (argv.host as string) || "127.0.0.1");
+      return;
+    }
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error("Tavily MCP server running on stdio");
+  }
+
+  /**
+   * Connect this instance's MCP server to a caller-provided transport
+   * (used by runHttpServer to give each HTTP session its own Server/transport pair).
+   */
+  async connectTransport(transport: StreamableHTTPServerTransport): Promise<void> {
+    await this.server.connect(transport);
+  }
+
+  /**
+   * Run as an HTTP service (MCP Streamable HTTP transport) instead of stdio.
+   * Stateful mode: one Server+transport pair per session, tracked by the
+   * mcp-session-id header. Endpoint: POST/GET/DELETE /mcp
+   */
+  private async runHttpServer(port: number, host: string): Promise<void> {
+    const http = await import("node:http");
+    const { StreamableHTTPServerTransport: HttpTransport } = await import(
+      "@modelcontextprotocol/sdk/server/streamableHttp.js"
+    );
+
+    const sessions = new Map<string, InstanceType<typeof HttpTransport>>();
+    const jsonError = (res: ServerResponse, status: number, message: string) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32600, message }, id: null }));
+    };
+
+    const httpServer = http.createServer(async (req, res) => {
+      try {
+        if (req.url !== "/mcp") {
+          jsonError(res, 404, "Not found: the MCP endpoint is /mcp");
+          return;
+        }
+        const sessionId = req.headers["mcp-session-id"] as string | undefined;
+        const existing = sessionId ? sessions.get(sessionId) : undefined;
+
+        if (sessionId && !existing) {
+          jsonError(res, 404, "Session not found (server may have restarted) - reinitialize");
+          return;
+        }
+
+        if (!existing) {
+          // No session yet: only an initialize request can start one.
+          if (req.method !== "POST") {
+            jsonError(res, 400, "Missing mcp-session-id header - send an initialize request first");
+            return;
+          }
+          const transport = new HttpTransport({ sessionIdGenerator: () => randomUUID() });
+          transport.onclose = () => {
+            if (transport.sessionId) sessions.delete(transport.sessionId);
+          };
+          await new TavilyClient().connectTransport(transport);
+          await transport.handleRequest(req, res);
+          if (transport.sessionId) sessions.set(transport.sessionId, transport);
+          return;
+        }
+
+        await existing.handleRequest(req, res);
+      } catch (err) {
+        console.error("HTTP transport error:", err);
+        if (!res.headersSent) jsonError(res, 500, "Internal server error");
+      }
+    });
+
+    httpServer.on("error", (err) => {
+      console.error(`HTTP server error: ${err.message}`);
+      process.exit(1);
+    });
+
+    httpServer.listen(port, host, () => {
+      console.error(`Tavily MCP server listening on http://${host}:${port}/mcp (Streamable HTTP)`);
+    });
   }
 
   async search(params: any): Promise<TavilyResponse> {
@@ -1154,12 +1232,23 @@ function listTools(): void {
 // Add this interface before the command line parsing
 interface Arguments {
   'list-tools': boolean;
+  http?: number;
+  host: string;
   _: (string | number)[];
   $0: string;
 }
 
 // Modify the command line parsing section to use proper typing
 const argv = yargs(hideBin(process.argv))
+  .option('http', {
+    type: 'number',
+    description: 'Serve MCP over Streamable HTTP on this port (e.g. --http 3001) instead of stdio'
+  })
+  .option('host', {
+    type: 'string',
+    description: 'Bind address for --http mode (default: 127.0.0.1)',
+    default: '127.0.0.1'
+  })
   .option('list-tools', {
     type: 'boolean',
     description: 'List all available tools and exit',

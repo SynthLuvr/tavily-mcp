@@ -180,6 +180,39 @@ Before you begin, ensure you have:
 npx -y tavily-mcp@latest 
 ```
 
+### Running as an HTTP server
+
+By default the server speaks MCP over stdio. Pass `--http <port>` to serve the MCP Streamable HTTP transport instead — useful for self-hosting behind systemd, Docker, or a reverse proxy, and for clients that connect over the network:
+
+```bash
+node build/index.js --http 3001            # binds 127.0.0.1:3001, endpoint /mcp
+node build/index.js --http 3001 --host 0.0.0.0  # expose to the network (add auth/TLS in front)
+```
+
+The endpoint is `POST/GET/DELETE http://<host>:<port>/mcp` and follows the MCP Streamable HTTP transport spec: stateful sessions are issued via the `mcp-session-id` response header and terminated with an HTTP `DELETE`. Restarting the server invalidates existing sessions; clients reinitialize automatically.
+
+Example systemd unit (`~/.config/systemd/user/tavily-mcp.service`):
+
+```ini
+[Unit]
+Description=Tavily MCP server (Streamable HTTP)
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tavily-mcp
+EnvironmentFile=/etc/tavily-mcp.env   # contains TAVILY_API_KEY=...
+ExecStart=/usr/bin/node build/index.js --http 3001
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=default.target
+```
+
+> **Note:** The HTTP endpoint has no built-in authentication. Bind to loopback or put TLS + authentication (e.g. a reverse proxy checking an `Authorization` header) in front of it before exposing it beyond localhost.
+
 ## Default Parameters Configuration ⚙️
 
 You can set default parameter values for the `tavily-search` tool using the `DEFAULT_PARAMETERS` environment variable. This allows you to configure default search behavior without specifying these parameters in every request.
